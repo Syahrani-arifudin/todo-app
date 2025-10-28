@@ -3,8 +3,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
+// Definisikan tipe untuk item menu agar kode lebih aman dan terstruktur
+interface MenuItem {
+  id: number;
+  name: string;
+  Description: string | null;
+  Price: number; // Asumsi Price disimpan sebagai angka di Supabase
+}
+
 // Fungsi Utilitas sederhana untuk memformat harga
-const formatPrice = (price) => {
+// SOLUSI: Tentukan tipe data price secara eksplisit (string atau number)
+const formatPrice = (price: string | number): string => {
   const num = Number(price);
   if (isNaN(num)) return 'N/A';
   // Menggunakan 'Rp' dan pemisah ribuan
@@ -12,22 +21,23 @@ const formatPrice = (price) => {
 };
 
 export default function Home() {
-  // --- STATE (Tidak Berubah) ---
-  const [menuItems, setMenuItems] = useState([])
+  // --- STATE (Ditambahkan Tipe Data) ---
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [itemName, setItemName] = useState('')
   const [itemDescription, setItemDescription] = useState('')
-  const [itemPrice, setItemPrice] = useState('')
-  const [editingId, setEditingId] = useState(null) 
+  // itemPrice diikat ke input type="number", jadi kita gunakan string untuk state-nya
+  const [itemPrice, setItemPrice] = useState<string>('') 
+  const [editingId, setEditingId] = useState<number | null>(null) 
 
-  // --- FUNGSI CRUD & UTILITY (Tidak Berubah) ---
+  // --- FUNGSI CRUD & UTILITY ---
   const fetchMenu = useCallback(async () => {
     setLoading(true)
     setError(null)
     const { data, error } = await supabase
       .from('menu')
-      .select('id, name, Description, Price') 
+      .select('id, name, Description, Price') // Pastikan nama kolom sesuai di Supabase
       .order('id', { ascending: true }) 
     
     if (error) {
@@ -35,7 +45,7 @@ export default function Home() {
       setError(error.message)
       setMenuItems([])
     } else {
-      setMenuItems(data)
+      setMenuItems(data as MenuItem[]) // Type-casting data
     }
     setLoading(false)
   }, [])
@@ -49,6 +59,14 @@ export default function Home() {
       alert('Nama dan Harga tidak boleh kosong!')
       return
     }
+    
+    // Konversi itemPrice menjadi Number untuk Supabase (jika kolom Price di DB adalah numeric)
+    const priceValue = Number(itemPrice);
+    if (isNaN(priceValue)) {
+      alert('Harga harus berupa angka yang valid!');
+      return;
+    }
+    
     setLoading(true)
     let error
     
@@ -56,14 +74,14 @@ export default function Home() {
       // MODE UPDATE
       const { error: updateError } = await supabase
         .from('menu')
-        .update({ name: itemName, Description: itemDescription, Price: itemPrice })
+        .update({ name: itemName, Description: itemDescription, Price: priceValue }) // Gunakan priceValue
         .eq('id', editingId)
       error = updateError
     } else {
       // MODE CREATE
       const { error: createError } = await supabase
         .from('menu')
-        .insert({ name: itemName, Description: itemDescription, Price: itemPrice })
+        .insert({ name: itemName, Description: itemDescription, Price: priceValue }) // Gunakan priceValue
       error = createError
     }
 
@@ -77,7 +95,7 @@ export default function Home() {
     setLoading(false)
   }
 
-  async function deleteItem(id) {
+  async function deleteItem(id: number) { // Tambahkan tipe number
     if (window.confirm('Yakin ingin menghapus item ini?')) {
       setLoading(true)
       const { error } = await supabase
@@ -95,10 +113,11 @@ export default function Home() {
     }
   }
 
-  function editItem(item) {
+  function editItem(item: MenuItem) { // Tambahkan tipe MenuItem
     setItemName(item.name)
     setItemDescription(item.Description || '')
-    setItemPrice(item.Price)
+    // Konversi Price kembali menjadi string untuk di-set ke input type="number"
+    setItemPrice(String(item.Price)) 
     setEditingId(item.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -156,7 +175,7 @@ export default function Home() {
             value={itemDescription} 
             onChange={(e) => setItemDescription(e.target.value)} 
             placeholder="Deskripsi singkat, bahan, atau catatan..."
-            rows="3"
+            rows={3}
             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
             disabled={loading}
           />
@@ -177,7 +196,7 @@ export default function Home() {
             onClick={handleSubmit} 
             className={`px-4 py-2 text-white font-semibold rounded-lg transition duration-150 disabled:opacity-50 ${
               editingId 
-                ? 'bg-orange-500 hover:bg-orange-600' // Biru untuk Tambah, Oranye untuk Edit
+                ? 'bg-orange-500 hover:bg-orange-600'
                 : 'bg-blue-600 hover:bg-blue-700'
             }`}
             disabled={loading}
@@ -208,7 +227,8 @@ export default function Home() {
                       {item.name}
                     </h3>
                     <div className="text-lg font-extrabold text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                      {formatPrice(item.Price)}
+                      {/* Menggunakan item.Price yang sudah pasti number/string */}
+                      {formatPrice(item.Price)} 
                     </div>
                   </div>
 
